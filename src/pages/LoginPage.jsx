@@ -1,4 +1,5 @@
-// src/pages/LoginPage.jsx — TeamPulse branding
+// src/pages/LoginPage.jsx
+// Fix 5: Password reset email + email verification before login
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -11,53 +12,36 @@ import {
 import {
   getAuth, sendPasswordResetEmail, sendEmailVerification,
 } from "firebase/auth";
-import {
-  Mail, Lock, User, ArrowRight, Eye, EyeOff, KeyRound,
-  Zap, Search, MessageSquare, BarChart2,
-} from "lucide-react";
-
-// Professional feature icons using Lucide
-const FEATURES = [
-  {
-    icon: Zap,
-    text: "Extracts tasks, deadlines & assignees from meetings automatically",
-  },
-  {
-    icon: Search,
-    text: "Semantic search across all your team's documents and discussions",
-  },
-  {
-    icon: MessageSquare,
-    text: "Real-time collaboration with AI-powered conversation summaries",
-  },
-  {
-    icon: BarChart2,
-    text: "Track team productivity, task trends and performance analytics",
-  },
-];
+import { Brain, Mail, Lock, User, ArrowRight, Eye, EyeOff, Sparkles, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { setUser, setToken, setTeams, setActiveTeam } = useStore();
 
-  const [mode,             setMode]             = useState("login");
-  const [loading,          setLoading]          = useState(false);
-  const [showPw,           setShowPw]           = useState(false);
-  const [form,             setForm]             = useState({ email: "", password: "", name: "" });
+  const [mode,    setMode]    = useState("login"); // login | signup | reset
+  const [loading, setLoading] = useState(false);
+  const [showPw,  setShowPw]  = useState(false);
+  const [form,    setForm]    = useState({ email: "", password: "", name: "" });
   const [verificationSent, setVerificationSent] = useState(false);
 
   const setField = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
 
+  // ── After successful auth ─────────────────────────────────
   const finishLogin = async (idToken, email, displayName) => {
     const r = await authApi.firebaseLogin(idToken, email, displayName);
     setToken(r.data.accessToken);
     setUser(r.data.user);
     const teamsR = await authApi.getMyTeams();
     setTeams(teamsR.data.teams);
-    if (teamsR.data.teams.length === 0) navigate("/onboarding");
-    else { setActiveTeam(teamsR.data.teams[0]); navigate("/"); }
+    if (teamsR.data.teams.length === 0) {
+      navigate("/onboarding");
+    } else {
+      setActiveTeam(teamsR.data.teams[0]);
+      navigate("/");
+    }
   };
 
+  // ── Google sign-in ────────────────────────────────────────
   const handleGoogle = async () => {
     if (!auth) { toast.error("Firebase not configured. Use email login."); return; }
     setLoading(true);
@@ -65,36 +49,47 @@ export default function LoginPage() {
       const result  = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken();
       await finishLogin(idToken, result.user.email, result.user.displayName);
-      toast.success("Welcome to TeamPulse! 🎉");
+      toast.success("Welcome! 🎉");
     } catch (e) {
-      if (e.code !== "auth/popup-closed-by-user")
+      if (e.code !== "auth/popup-closed-by-user") {
         toast.error(e.message || "Google sign-in failed");
+      }
     } finally { setLoading(false); }
   };
 
+  // ── Email sign-in / sign-up ───────────────────────────────
   const handleEmail = async (e) => {
     e.preventDefault();
     if (!form.email.trim())       { toast.error("Email is required"); return; }
     if (form.password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+
     setLoading(true);
     try {
       if (auth) {
         if (mode === "signup") {
+          // Create account
           const result = await createUserWithEmailAndPassword(auth, form.email, form.password);
+
+          // FIX 5a: Send verification email
           await sendEmailVerification(result.user);
           setVerificationSent(true);
-          setMode("login");
-          toast.success("Verification email sent! Check your inbox before signing in.", { duration: 6000 });
           setLoading(false);
+          toast.success("Verification email sent! Check your inbox before signing in.", { duration: 6000 });
+          setMode("login");
           return;
+
         } else {
+          // Sign in
           const result = await signInWithEmailAndPassword(auth, form.email, form.password);
+
+          // FIX 5b: Block login if email not verified
           if (!result.user.emailVerified) {
+            // Offer to resend verification
             toast(
               (t) => (
                 <div className="flex flex-col gap-2">
-                  <p className="text-sm font-semibold">Email not verified yet.</p>
-                  <p className="text-xs text-gray-500">Check your inbox or resend the link.</p>
+                  <p className="text-sm font-medium">Email not verified yet.</p>
+                  <p className="text-xs text-gray-500">Check your inbox or resend the verification email.</p>
                   <button
                     onClick={async () => {
                       await sendEmailVerification(result.user);
@@ -113,35 +108,43 @@ export default function LoginPage() {
             setLoading(false);
             return;
           }
+
           const idToken = await result.user.getIdToken();
           await finishLogin(idToken, result.user.email, result.user.displayName || form.name);
           toast.success("Welcome back! 👋");
         }
       } else {
+        // Dev mode — bypass Firebase
         const mockToken = `mock_${Date.now()}`;
         await finishLogin(mockToken, form.email, form.name || form.email.split("@")[0]);
-        toast.success(mode === "signup" ? "Account created!" : "Signed in!");
+        toast.success(mode === "signup" ? "Account created (dev mode)!" : "Signed in (dev mode)!");
       }
     } catch (e) {
       const msgs = {
-        "auth/user-not-found":       "No account found. Sign up first.",
-        "auth/wrong-password":       "Incorrect password.",
-        "auth/invalid-credential":   "Invalid email or password.",
-        "auth/email-already-in-use": "Email already registered. Sign in.",
-        "auth/invalid-email":        "Invalid email address.",
-        "auth/too-many-requests":    "Too many attempts. Try again later.",
+        "auth/user-not-found":      "No account found. Sign up first.",
+        "auth/wrong-password":      "Incorrect password.",
+        "auth/invalid-credential":  "Invalid email or password.",
+        "auth/email-already-in-use":"Email already registered. Sign in.",
+        "auth/invalid-email":       "Invalid email address.",
+        "auth/too-many-requests":   "Too many attempts. Try again later.",
+        "auth/network-request-failed": "Network error. Check your connection.",
       };
       toast.error(msgs[e.code] || e.message || "Authentication failed");
     } finally { setLoading(false); }
   };
 
+  // ── FIX 5c: Password reset (only for registered emails) ───
   const handlePasswordReset = async (e) => {
     e.preventDefault();
     const email = form.email.trim();
     if (!email) { toast.error("Enter your email address first"); return; }
-    if (!auth)  { toast.error("Firebase not configured"); return; }
+    if (!auth) { toast.error("Firebase not configured — use dev mode"); return; }
     setLoading(true);
     try {
+      // First check if user exists in our backend
+      // We attempt sign-in with wrong password to trigger auth/wrong-password
+      // If we get auth/user-not-found → not registered
+      // A cleaner way: try fetchSignInMethodsForEmail
       const { fetchSignInMethodsForEmail } = await import("firebase/auth");
       const methods = await fetchSignInMethodsForEmail(auth, email);
       if (!methods || methods.length === 0) {
@@ -150,88 +153,74 @@ export default function LoginPage() {
         return;
       }
       await sendPasswordResetEmail(auth, email);
-      toast.success(`Password reset link sent to ${email}`, { duration: 6000 });
+      toast.success(`Password reset link sent to ${email}. Check your inbox!`, { duration: 6000 });
       setMode("login");
     } catch (e) {
       const msgs = {
-        "auth/user-not-found":    "No account found with this email.",
+        "auth/user-not-found":    "No account found with this email. Sign up to get started.",
         "auth/invalid-email":     "Invalid email address.",
-        "auth/too-many-requests": "Too many requests. Try again later.",
+        "auth/too-many-requests": "Too many requests. Please try again later.",
+        "auth/invalid-credential":"No account found with this email.",
       };
-      toast.error(msgs[e.code] || "Failed to send reset email");
+      toast.error(msgs[e.code] || e.message || "Failed to send reset email");
     } finally { setLoading(false); }
   };
 
   return (
     <div className="min-h-screen flex bg-[var(--bg)]">
 
-      {/* ── Left hero panel ───────────────────────────────────── */}
-      <div className="hidden lg:flex flex-col justify-between w-[45%] bg-gradient-to-br from-brand-800 via-brand-600 to-brand-500 p-12 text-white relative overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-white/5 blur-3xl"/>
-          <div className="absolute -bottom-20 -left-10 w-64 h-64 rounded-full bg-white/5 blur-2xl"/>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-white/3 blur-3xl"/>
+      {/* ── Left hero ──────────────────────────────────────── */}
+      <div className="hidden lg:flex flex-col justify-between w-[45%] bg-gradient-to-br from-brand-700 via-brand-600 to-brand-500 p-12 text-white relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-20 right-10 w-64 h-64 rounded-full bg-white blur-3xl"/>
+          <div className="absolute bottom-20 left-10 w-48 h-48 rounded-full bg-white blur-2xl"/>
         </div>
-
-        {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/15 backdrop-blur rounded-xl flex items-center justify-center border border-white/20">
-            <Zap size={20} className="text-white"/>
+          <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+            <Brain size={22}/>
           </div>
-          <span className="text-2xl font-bold tracking-tight">TeamPulse</span>
+          <span className="text-xl font-bold">AI Team Brain</span>
         </div>
-
-        {/* Hero text */}
         <div className="relative">
-          <p className="text-brand-200 text-sm font-medium uppercase tracking-widest mb-4">
-            Where teams move as one
+          <h1 className="text-5xl font-bold leading-tight mb-6">Your team's<br/>second brain.</h1>
+          <p className="text-brand-100 text-lg leading-relaxed mb-10">
+            Stop losing decisions in chat threads. AI Team Brain captures everything,
+            extracts tasks automatically, and keeps your whole team aligned.
           </p>
-          <h1 className="text-4xl font-bold leading-tight mb-3">
-            Every decision.<br/>Every deadline.<br/>Every person.
-          </h1>
-          <p className="text-brand-100 text-base leading-relaxed mb-10 max-w-sm">
-            TeamPulse turns scattered meetings, chats, and documents into clear action —
-            so your team always knows what's next.
-          </p>
-
-          {/* Feature list with Lucide icons */}
           <div className="space-y-4">
-            {FEATURES.map(({ icon: Icon, text }) => (
-              <div key={text} className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center shrink-0 mt-0.5">
-                  <Icon size={15} className="text-brand-200"/>
-                </div>
-                <p className="text-brand-100 text-sm leading-relaxed">{text}</p>
+            {[
+              { icon: "🤖", text: "AI extracts tasks from meetings & PDFs"     },
+              { icon: "🔍", text: "Semantic search across all team knowledge"   },
+              { icon: "💬", text: "Real-time chat with AI summaries"            },
+              { icon: "📊", text: "Team analytics & productivity tracking"      },
+            ].map(f => (
+              <div key={f.text} className="flex items-center gap-3">
+                <span className="text-xl">{f.icon}</span>
+                <span className="text-brand-100">{f.text}</span>
               </div>
             ))}
           </div>
         </div>
-
-        {/* Bottom quote */}
         <div className="relative">
-          <div className="border-l-2 border-white/30 pl-4">
-            <p className="text-brand-100 text-sm italic leading-relaxed">
-              "The best teams don't just communicate — they stay in sync."
-            </p>
-            <p className="text-brand-300 text-xs mt-2 font-medium">— TeamPulse</p>
+          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur rounded-full px-4 py-2 text-sm">
+            <Sparkles size={14} className="text-brand-200"/>
+            <span className="text-brand-100">Built for the AI at Work Hackathon 🏆</span>
           </div>
         </div>
       </div>
 
-      {/* ── Right auth panel ──────────────────────────────────── */}
+      {/* ── Right panel ────────────────────────────────────── */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
 
-          {/* Mobile logo */}
           <div className="flex items-center gap-3 mb-8 lg:hidden">
-            <div className="w-9 h-9 bg-brand-600 rounded-xl flex items-center justify-center">
-              <Zap size={18} className="text-white"/>
+            <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center">
+              <Brain size={22} className="text-white"/>
             </div>
-            <span className="text-xl font-bold text-[var(--text)]">TeamPulse</span>
+            <span className="text-xl font-bold text-[var(--text)]">AI Team Brain</span>
           </div>
 
-          {/* ── Password reset mode ──────────────────────────── */}
+          {/* ── Password Reset Mode ─────────────────────────── */}
           {mode === "reset" ? (
             <>
               <div className="flex items-center gap-3 mb-6">
@@ -243,17 +232,28 @@ export default function LoginPage() {
                   <p className="text-sm text-[var(--text-2)]">We'll send a reset link to your email</p>
                 </div>
               </div>
+
               <form onSubmit={handlePasswordReset} className="space-y-4">
                 <div className="relative">
                   <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-2)]"/>
-                  <input className="input pl-10" type="email" placeholder="Your email address"
-                    value={form.email} onChange={setField("email")} required autoFocus/>
+                  <input
+                    className="input pl-10"
+                    type="email"
+                    placeholder="Your email address"
+                    value={form.email}
+                    onChange={setField("email")}
+                    required autoFocus
+                  />
                 </div>
                 <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 text-sm">
                   {loading ? "Sending…" : <><span>Send reset email</span><ArrowRight size={16}/></>}
                 </button>
               </form>
-              <button onClick={() => setMode("login")} className="mt-4 text-sm text-brand-600 hover:underline block text-center">
+
+              <button
+                onClick={() => setMode("login")}
+                className="mt-4 text-sm text-brand-600 hover:underline block text-center"
+              >
                 ← Back to sign in
               </button>
             </>
@@ -264,18 +264,18 @@ export default function LoginPage() {
                 <div className="mb-5 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <p className="text-sm font-semibold text-green-700 dark:text-green-400">📧 Check your inbox!</p>
                   <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-                    Verify your email before signing in.
+                    A verification email was sent. Click the link in the email before signing in.
                   </p>
                 </div>
               )}
 
               <h2 className="text-2xl font-bold text-[var(--text)] mb-1">
-                {mode === "login" ? "Welcome back" : "Join TeamPulse"}
+                {mode === "login" ? "Sign in to your workspace" : "Create your account"}
               </h2>
               <p className="text-[var(--text-2)] text-sm mb-7">
                 {mode === "login"
-                  ? "Sign in to your workspace"
-                  : "Create your account and get your team in sync"}
+                  ? "Welcome back! Enter your details below."
+                  : "Start collaborating with AI-powered tools."}
               </p>
 
               {/* Google */}
@@ -303,14 +303,26 @@ export default function LoginPage() {
                 {mode === "signup" && (
                   <div className="relative">
                     <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-2)]"/>
-                    <input className="input pl-10" placeholder="Full name"
-                      value={form.name} onChange={setField("name")} autoComplete="name"/>
+                    <input
+                      className="input pl-10"
+                      placeholder="Full name"
+                      value={form.name}
+                      onChange={setField("name")}
+                      autoComplete="name"
+                    />
                   </div>
                 )}
                 <div className="relative">
                   <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-2)]"/>
-                  <input className="input pl-10" type="email" placeholder="Email address"
-                    value={form.email} onChange={setField("email")} autoComplete="email" required/>
+                  <input
+                    className="input pl-10"
+                    type="email"
+                    placeholder="Email address"
+                    value={form.email}
+                    onChange={setField("email")}
+                    autoComplete="email"
+                    required
+                  />
                 </div>
                 <div>
                   <div className="relative">
@@ -324,14 +336,21 @@ export default function LoginPage() {
                       autoComplete={mode === "signup" ? "new-password" : "current-password"}
                       required
                     />
-                    <button type="button" onClick={() => setShowPw(v => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-2)] hover:text-[var(--text)]">
+                    <button
+                      type="button"
+                      onClick={() => setShowPw(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-2)] hover:text-[var(--text)]"
+                    >
                       {showPw ? <EyeOff size={15}/> : <Eye size={15}/>}
                     </button>
                   </div>
+                  {/* FIX 5c: Forgot password link */}
                   {mode === "login" && (
-                    <button type="button" onClick={() => setMode("reset")}
-                      className="mt-1.5 text-xs text-brand-600 hover:underline float-right">
+                    <button
+                      type="button"
+                      onClick={() => setMode("reset")}
+                      className="mt-1.5 text-xs text-brand-600 hover:underline float-right"
+                    >
                       Forgot password?
                     </button>
                   )}
@@ -368,8 +387,8 @@ export default function LoginPage() {
               </p>
 
               {!auth && (
-                <p className="text-center text-xs text-[var(--text-2)] mt-3 opacity-60">
-                  Dev mode active — email verification disabled
+                <p className="text-center text-xs text-[var(--text-2)] mt-3 opacity-70">
+                  Dev mode: email verification disabled
                 </p>
               )}
             </>

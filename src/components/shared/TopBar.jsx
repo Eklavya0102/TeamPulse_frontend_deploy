@@ -27,7 +27,7 @@ export default function TopBar() {
 
   const [notifOpen, setNotifOpen] = useState(false);
   const socketRef   = useRef(null);
-  const { title, sub } = TITLES[pathname] || { title: "TeamPulse", sub: "" };
+  const { title, sub } = TITLES[pathname] || { title: "AI Team Brain", sub: "" };
 
   // ── Load notifications from API ───────────────────────────
   useEffect(() => {

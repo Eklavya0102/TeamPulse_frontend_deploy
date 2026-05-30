@@ -22,7 +22,7 @@ function Loader() {
               style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
         </div>
-        <p className="text-sm text-[var(--text-2)]">Loading TeamPulse…</p>
+        <p className="text-sm text-[var(--text-2)]">Loading AI Team Brain…</p>
       </div>
     </div>
   );

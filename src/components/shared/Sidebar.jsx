@@ -7,7 +7,7 @@ import useStore from "../../store/useStore";
 import { authApi } from "../../services/api";
 import toast from "react-hot-toast";
 import {
-  Zap, LayoutDashboard, CheckSquare, MessageSquare,
+  Brain, LayoutDashboard, CheckSquare, MessageSquare,
   BookOpen, BarChart2, Zap, ChevronDown, Plus, LogOut,
   Moon, Sun, Users, PanelLeftClose, ChevronRight, Trash2, AlertTriangle,
 } from "lucide-react";
@@ -148,7 +148,7 @@ export default function Sidebar() {
             {/* Logo */}
             <div className="flex items-center justify-center h-14 border-b border-[var(--border)] shrink-0">
               <div className="w-8 h-8 bg-brand-600 rounded-xl flex items-center justify-center">
-                <Zap size={17} className="text-white"/>
+                <Brain size={17} className="text-white"/>
               </div>
             </div>
 
@@ -198,9 +198,9 @@ export default function Sidebar() {
           {/* Header */}
           <div className="flex items-center h-14 border-b border-[var(--border)] px-3 gap-2.5 shrink-0">
             <div className="w-8 h-8 bg-brand-600 rounded-xl flex items-center justify-center shrink-0">
-              <Zap size={17} className="text-white"/>
+              <Brain size={17} className="text-white"/>
             </div>
-            <span className="font-bold text-sm text-[var(--text)] truncate flex-1">TeamPulse</span>
+            <span className="font-bold text-sm text-[var(--text)] truncate flex-1">AI Team Brain</span>
             <button
               onClick={() => setSidebarCollapsed(true)}
               className="text-[var(--text-2)] hover:text-[var(--text)] transition-colors p-1 ml-auto"
