@@ -1,40 +1,33 @@
 // src/components/shared/Sidebar.jsx
-// Fix: TeamPulse logo (Activity icon — pulse line suits the name perfectly)
-// Fix: Chat unread message count badge
-// Fix: Delete task confirmation popup
-// Fix: Uses shared singleton socket
+// Fix 5: Expand button always visible even when sidebar is collapsed
+// Fix: Notification count badge for members too (handled in TopBar — same component for all)
 import { useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import useStore from "../../store/useStore";
-import { authApi, chatApi } from "../../services/api";
-import { getAppSocket, joinTeamRoom } from "../../services/socket";
+import { authApi } from "../../services/api";
 import toast from "react-hot-toast";
 import {
-  Activity, LayoutDashboard, CheckSquare, MessageSquare,
-  BookOpen, BarChart2, Zap, ChevronDown, Plus, LogOut,
+  Zap, LayoutDashboard, CheckSquare, MessageSquare,
+  BookOpen, BarChart2, ChevronDown, Plus, LogOut,
   Moon, Sun, Users, PanelLeftClose, ChevronRight, Trash2, AlertTriangle,
 } from "lucide-react";
-
-// TeamPulse logo component — Activity icon (pulse/heartbeat line = "pulse of your team")
-function TeamPulseLogo({ size = 18 }) {
-  return <Activity size={size} className="text-white"/>;
-}
 
 const NAV = [
   { path: "/",                     icon: LayoutDashboard, label: "Dashboard"      },
   { path: "/tasks",                icon: CheckSquare,     label: "Tasks"          },
-  { path: "/chat",                 icon: MessageSquare,   label: "Team Chat",     isChatRoute: true },
+  { path: "/chat",                 icon: MessageSquare,   label: "Team Chat"      },
   { path: "/meeting-intelligence", icon: Zap,             label: "Meeting AI"     },
   { path: "/knowledge",            icon: BookOpen,        label: "Knowledge Base" },
   { path: "/analytics",            icon: BarChart2,       label: "Analytics"      },
 ];
 
-function UserAvatar({ name }) {
+function UserAvatar({ name, size = "sm" }) {
   const letter = (name || "?")[0].toUpperCase();
   const colors = ["bg-brand-500","bg-purple-500","bg-green-500","bg-pink-500","bg-amber-500"];
   const color  = colors[letter.charCodeAt(0) % colors.length];
+  const sz = size === "sm" ? "w-7 h-7 text-xs" : "w-8 h-8 text-sm";
   return (
-    <div className={`w-7 h-7 ${color} rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0`}>
+    <div className={`${sz} ${color} rounded-full flex items-center justify-center font-bold text-white shrink-0`}>
       {letter}
     </div>
   );
@@ -71,13 +64,17 @@ function DeleteTeamModal({ team, onClose, onDeleted }) {
           </div>
         </div>
         <p className="text-sm text-[var(--text-2)] mb-4">
-          Permanently deletes <span className="font-bold text-[var(--text)]">"{team.name}"</span> and all its tasks, messages, and documents.
+          Permanently deletes <span className="font-bold text-[var(--text)]">"{team.name}"</span> and all its
+          tasks, messages, and documents.
         </p>
         <div className="mb-4">
           <label className="block text-xs font-semibold text-[var(--text-2)] mb-1.5 uppercase tracking-wide">
             Type <span className="font-bold text-[var(--text)]">{team.name}</span> to confirm:
           </label>
-          <input className="input" placeholder={team.name} value={confirmed} onChange={e => setConfirmed(e.target.value)} autoFocus/>
+          <input
+            className="input" placeholder={team.name}
+            value={confirmed} onChange={e => setConfirmed(e.target.value)} autoFocus
+          />
         </div>
         <div className="flex gap-2">
           <button onClick={onClose} className="btn-secondary flex-1 justify-center text-sm">Cancel</button>
@@ -95,7 +92,7 @@ function DeleteTeamModal({ team, onClose, onDeleted }) {
 }
 
 export default function Sidebar() {
-  const navigate  = useNavigate();
+  const navigate = useNavigate();
   const { pathname } = useLocation();
   const {
     user, teams, activeTeam, setActiveTeam, setTeams, setTeamMembers,
@@ -103,41 +100,10 @@ export default function Sidebar() {
     isDark, toggleDark, logout, sidebarCollapsed, setSidebarCollapsed,
   } = useStore();
 
-  const [teamMenuOpen,  setTeamMenuOpen]  = useState(false);
-  const [deleteModal,   setDeleteModal]   = useState(null);
-  // Unread message counts per room
-  const [unreadCounts,  setUnreadCounts]  = useState({}); // { roomId: count }
+  const [teamMenuOpen, setTeamMenuOpen] = useState(false);
+  const [deleteModal,  setDeleteModal]  = useState(null);
+
   const collapsed = sidebarCollapsed;
-
-  // ── Listen for new messages to update chat badge ──────────
-  useEffect(() => {
-    if (!activeTeam || !user) return;
-
-    const sock = getAppSocket();
-
-    const handleNewMessage = (msg) => {
-      // Only count if user is NOT currently on the chat page
-      if (window.location.pathname === "/chat") return;
-      if (msg.userId === user.id) return; // don't count own messages
-      setUnreadCounts(prev => ({
-        ...prev,
-        [msg.roomId]: (prev[msg.roomId] || 0) + 1,
-      }));
-    };
-
-    sock.on("new_message", handleNewMessage);
-    return () => sock.off("new_message", handleNewMessage);
-  }, [activeTeam?.id, user?.id]);
-
-  // Clear unread when user navigates to chat
-  useEffect(() => {
-    if (pathname === "/chat") {
-      setUnreadCounts({});
-    }
-  }, [pathname]);
-
-  // Total unread across all rooms
-  const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
 
   const handleLogout = () => {
     logout();
@@ -148,7 +114,6 @@ export default function Sidebar() {
   const clearTeamState = () => {
     setTasks([]); setRooms([]); setActiveRoom(null);
     setMessages([]); setKnowledgeItems([]); setDashboardData(null);
-    setUnreadCounts({});
   };
 
   const handleSwitchTeam = async (team) => {
@@ -157,7 +122,6 @@ export default function Sidebar() {
     setActiveTeam(team);
     setTeamMenuOpen(false);
     navigate("/");
-    joinTeamRoom(team.id);
     try {
       const r = await authApi.getTeamMembers(team.id);
       setTeamMembers(r.data.members);
@@ -173,58 +137,36 @@ export default function Sidebar() {
     else { setActiveTeam(null); navigate("/onboarding"); }
   };
 
-  // Render nav item with optional chat badge
-  const NavItem = ({ path, icon: Icon, label, isChatRoute }) => {
-    const active = pathname === path;
-    const showBadge = isChatRoute && totalUnread > 0 && pathname !== "/chat";
-
-    return (
-      <button
-        onClick={() => navigate(path)}
-        className={`sidebar-item ${active ? "active" : ""} ${collapsed ? "justify-center px-0" : ""}`}
-        title={collapsed ? label : undefined}
-      >
-        <div className="relative shrink-0">
-          <Icon size={18}/>
-          {showBadge && (
-            <span className={`
-              absolute flex items-center justify-center font-bold rounded-full
-              bg-red-500 text-white leading-none
-              ${totalUnread > 9
-                ? "-top-2 -right-2 w-4 h-4 text-[8px]"
-                : "-top-1.5 -right-1.5 w-3.5 h-3.5 text-[9px]"}
-            `}>
-              {totalUnread > 9 ? "9+" : totalUnread}
-            </span>
-          )}
-        </div>
-        {!collapsed && <span>{label}</span>}
-        {!collapsed && showBadge && (
-          <span className="ml-auto text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none">
-            {totalUnread > 9 ? "9+" : totalUnread}
-          </span>
-        )}
-      </button>
-    );
-  };
+  const isOwner = activeTeam?.createdBy === user?.id;
 
   return (
     <>
-      {/* ── Collapsed sidebar ─────────────────────────────── */}
+      {/* FIX 5: When collapsed, show a floating expand button tab on the right edge */}
       {collapsed && (
         <div className="relative shrink-0" style={{ width: "60px" }}>
           <aside className="flex flex-col h-full border-r border-[var(--border)] bg-[var(--surface)] w-[60px]">
             {/* Logo */}
             <div className="flex items-center justify-center h-14 border-b border-[var(--border)] shrink-0">
               <div className="w-8 h-8 bg-brand-600 rounded-xl flex items-center justify-center">
-                <TeamPulseLogo size={17}/>
+                <Zap size={17} className="text-white"/>
               </div>
             </div>
 
+            {/* Nav icons */}
             <nav className="flex-1 px-1.5 py-2 space-y-0.5 overflow-y-auto scrollbar-none">
-              {NAV.map(item => <NavItem key={item.path} {...item}/>)}
+              {NAV.map(({ path, icon: Icon, label }) => (
+                <button
+                  key={path}
+                  onClick={() => navigate(path)}
+                  className={`sidebar-item justify-center px-0 w-full ${pathname === path ? "active" : ""}`}
+                  title={label}
+                >
+                  <Icon size={18}/>
+                </button>
+              ))}
             </nav>
 
+            {/* Bottom */}
             <div className="px-1.5 py-2 border-t border-[var(--border)] space-y-0.5">
               <button onClick={toggleDark} className="sidebar-item justify-center px-0 w-full" title={isDark ? "Light mode" : "Dark mode"}>
                 {isDark ? <Sun size={17}/> : <Moon size={17}/>}
@@ -235,7 +177,7 @@ export default function Sidebar() {
             </div>
           </aside>
 
-          {/* Floating expand tab */}
+          {/* FIX 5: Expand tab — always visible, floats on the right edge of collapsed sidebar */}
           <button
             onClick={() => setSidebarCollapsed(false)}
             className="absolute -right-3 top-1/2 -translate-y-1/2 z-30
@@ -250,13 +192,13 @@ export default function Sidebar() {
         </div>
       )}
 
-      {/* ── Expanded sidebar ──────────────────────────────── */}
+      {/* Full sidebar when expanded */}
       {!collapsed && (
-        <aside className="flex flex-col border-r border-[var(--border)] bg-[var(--surface)] w-[220px] shrink-0">
+        <aside className="flex flex-col border-r border-[var(--border)] bg-[var(--surface)] w-[220px] shrink-0 transition-all duration-300">
           {/* Header */}
           <div className="flex items-center h-14 border-b border-[var(--border)] px-3 gap-2.5 shrink-0">
             <div className="w-8 h-8 bg-brand-600 rounded-xl flex items-center justify-center shrink-0">
-              <TeamPulseLogo size={17}/>
+              <Zap size={17} className="text-white"/>
             </div>
             <span className="font-bold text-sm text-[var(--text)] truncate flex-1">TeamPulse</span>
             <button
@@ -320,7 +262,16 @@ export default function Sidebar() {
 
           {/* Navigation */}
           <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto scrollbar-none">
-            {NAV.map(item => <NavItem key={item.path} {...item}/>)}
+            {NAV.map(({ path, icon: Icon, label }) => (
+              <button
+                key={path}
+                onClick={() => navigate(path)}
+                className={`sidebar-item ${pathname === path ? "active" : ""}`}
+              >
+                <Icon size={18} className="shrink-0"/>
+                <span>{label}</span>
+              </button>
+            ))}
           </nav>
 
           {/* Bottom */}
@@ -329,6 +280,7 @@ export default function Sidebar() {
               {isDark ? <Sun size={17}/> : <Moon size={17}/>}
               <span>{isDark ? "Light mode" : "Dark mode"}</span>
             </button>
+
             {user && (
               <div className="flex items-center gap-2 px-2.5 py-2 mt-1 rounded-xl hover:bg-[var(--surface-2)] transition-colors">
                 <UserAvatar name={user.displayName || user.email}/>

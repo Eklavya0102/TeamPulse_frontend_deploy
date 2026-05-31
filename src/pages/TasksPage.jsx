@@ -3,8 +3,8 @@
 // Fix: Start confirmation for assignee
 // Fix: Responsive layout
 import { useEffect, useState, useRef } from "react";
+import { io } from "socket.io-client";
 import useStore from "../store/useStore";
-import { getAppSocket, joinTeamRoom } from "../services/socket";
 import { tasksApi } from "../services/api";
 import { format, parseISO } from "date-fns";
 import {
@@ -288,44 +288,12 @@ function TaskCard({ task, onUpdate, onDelete, currentUser, isOwner }) {
   );
 }
 
-// ── Delete Task Confirm Modal ────────────────────────────────
-function DeleteTaskModal({ task, onConfirm, onCancel }) {
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="card w-full max-w-sm p-6 animate-slide-up">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
-            <Trash2 size={20} className="text-red-600"/>
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-[var(--text)]">Delete Task?</h3>
-            <p className="text-xs text-[var(--text-2)] mt-0.5">This action cannot be undone</p>
-          </div>
-        </div>
-        <div className="bg-[var(--surface-2)] rounded-xl px-3 py-2.5 mb-5 text-sm text-[var(--text)] leading-relaxed">
-          "{task.title}"
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onCancel} className="btn-secondary flex-1 justify-center text-sm">Cancel</button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
-          >
-            <Trash2 size={14}/> Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Main TasksPage ────────────────────────────────────────────
 export default function TasksPage() {
   const { activeTeam, user, tasks, setTasks, addTask, updateTask, removeTask, teamMembers } = useStore();
-  const [loading,       setLoading]       = useState(true);
-  const [showCreate,    setShowCreate]    = useState(false);
-  const [filter,        setFilter]        = useState("all");
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [filter,     setFilter]     = useState("all");
   const socketRef = useRef(null);
   const isOwner = activeTeam?.createdBy === user?.id;
 
@@ -344,12 +312,13 @@ export default function TasksPage() {
   // Real-time socket
   useEffect(() => {
     if (!activeTeam || !user) return;
-    const sock = getAppSocket();
+    const sock = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:5000", {
+      transports: ["websocket", "polling"], reconnection: true,
+    });
     socketRef.current = sock;
-    // Join team room for task broadcasts
-    const doJoin = () => sock.emit("join_team_room", { teamId: activeTeam.id, userId: user.id });
-    if (sock.connected) doJoin();
-    else sock.once("connect", doJoin);
+    sock.on("connect", () => {
+      sock.emit("join_team_room", { teamId: activeTeam.id, userId: user.id });
+    });
     sock.on("new_task", (task) => {
       const exists = useStore.getState().tasks.find(t => t.id === task.id);
       if (!exists) {
@@ -362,10 +331,8 @@ export default function TasksPage() {
     sock.on("task_deleted", ({ taskId }) => removeTask(taskId));
     return () => {
       sock.emit("leave_team_room", { teamId: activeTeam.id });
-      sock.off("new_task");
-      sock.off("task_updated");
-      sock.off("task_deleted");
-      // Don't disconnect shared socket
+      sock.off("new_task"); sock.off("task_updated"); sock.off("task_deleted");
+      sock.disconnect();
     };
   }, [activeTeam?.id, user?.id]);
 
@@ -385,12 +352,7 @@ export default function TasksPage() {
       toast.error("Only the team owner can delete completed tasks");
       return;
     }
-    setDeleteConfirm(task); // show modal instead of browser confirm
-  };
-
-  const confirmDelete = async () => {
-    const task = deleteConfirm;
-    setDeleteConfirm(null);
+    if (!confirm(`Delete "${task.title}"?`)) return;
     try {
       await tasksApi.delete(activeTeam.id, task.id);
       removeTask(task.id);
@@ -521,14 +483,6 @@ export default function TasksPage() {
           onCreated={handleCreated}
           teamId={activeTeam.id}
           members={teamMembers}
-        />
-      )}
-
-      {deleteConfirm && (
-        <DeleteTaskModal
-          task={deleteConfirm}
-          onConfirm={confirmDelete}
-          onCancel={() => setDeleteConfirm(null)}
         />
       )}
     </div>
