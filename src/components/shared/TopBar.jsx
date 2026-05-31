@@ -1,34 +1,35 @@
 // src/components/shared/TopBar.jsx
-// Fix: Uses shared singleton socket - notifications now instant without refresh
-// Fix: Unread count badge shows number
-import { useEffect, useState } from "react";
+// Fix: Show notification COUNT number instead of red dot
+// Fix: Instant notifications via socket (join_user_room on mount)
+import { useEffect, useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
+import { io } from "socket.io-client";
 import useStore from "../../store/useStore";
 import { tasksApi } from "../../services/api";
-import { initUserSocket } from "../../services/socket";
 import { Bell, Share2, X, CheckCheck } from "lucide-react";
 import toast from "react-hot-toast";
 
 const TITLES = {
-  "/":                     { title: "Dashboard",     sub: "Overview of your team"          },
-  "/tasks":                { title: "Tasks",          sub: "Manage and track work"           },
-  "/chat":                 { title: "Team Chat",      sub: "Real-time collaboration"         },
-  "/meeting-intelligence": { title: "Meeting AI",     sub: "Extract tasks from discussions"  },
-  "/knowledge":            { title: "Knowledge Base", sub: "Search your team's documents"    },
-  "/analytics":            { title: "Analytics",      sub: "Team productivity insights"      },
+  "/":                     { title: "Dashboard",     sub: "Overview of your team"              },
+  "/tasks":                { title: "Tasks",          sub: "Manage and track work"              },
+  "/chat":                 { title: "Team Chat",      sub: "Real-time collaboration"            },
+  "/meeting-intelligence": { title: "Meeting AI",     sub: "Extract tasks from discussions"     },
+  "/knowledge":            { title: "Knowledge Base", sub: "Search your team's documents"       },
+  "/analytics":            { title: "Analytics",      sub: "Team productivity insights"         },
 };
 
 export default function TopBar() {
-  const { pathname } = useLocation();
+  const { pathname }  = useLocation();
   const {
     activeTeam, user,
     notifications, setNotifications, markNotifRead,
   } = useStore();
 
   const [notifOpen, setNotifOpen] = useState(false);
+  const socketRef   = useRef(null);
   const { title, sub } = TITLES[pathname] || { title: "TeamPulse", sub: "" };
 
-  // Load notifications from API on team change
+  // ── Load notifications from API ───────────────────────────
   useEffect(() => {
     if (!activeTeam) return;
     tasksApi.getNotifications(activeTeam.id)
@@ -36,32 +37,38 @@ export default function TopBar() {
       .catch(() => {});
   }, [activeTeam?.id]);
 
-  // Use shared singleton socket for instant notifications
+  // ── Join personal socket room for instant notifications ───
   useEffect(() => {
     if (!user?.id) return;
 
-    const sock = initUserSocket(user.id);
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+    const sock = io(SOCKET_URL, {
+      transports: ["websocket", "polling"],
+      reconnection: true,
+    });
+    socketRef.current = sock;
 
-    const handleNotif = (notif) => {
-      // Add to top of list instantly
+    sock.on("connect", () => {
+      // Join personal room to receive push notifications
+      sock.emit("join_user_room", { userId: user.id });
+    });
+
+    // Receive instant notification
+    sock.on("new_notification", (notif) => {
+      // Add to store
       useStore.getState().setNotifications(
-        prev => {
-          // avoid duplicates
-          if (prev.find(n => n.id === notif.id)) return prev;
-          return [notif, ...prev];
-        }
+        [notif, ...useStore.getState().notifications]
       );
       // Show toast
       toast(notif.message || notif.title, {
         icon: "🔔",
         duration: 4000,
       });
-    };
-
-    sock.on("new_notification", handleNotif);
+    });
 
     return () => {
-      sock.off("new_notification", handleNotif);
+      sock.off("new_notification");
+      sock.disconnect();
     };
   }, [user?.id]);
 
@@ -91,28 +98,39 @@ export default function TopBar() {
       {/* Title */}
       <div className="flex-1 min-w-0">
         <h1 className="text-sm font-bold text-[var(--text)] leading-tight">{title}</h1>
-        {sub && <p className="text-xs text-[var(--text-2)] leading-tight hidden sm:block">{sub}</p>}
+        {sub && <p className="text-xs text-[var(--text-2)] leading-tight">{sub}</p>}
       </div>
 
       {/* Actions */}
       <div className="flex items-center gap-1.5">
         {activeTeam && (
-          <button onClick={handleCopyInvite} className="btn-ghost text-xs gap-1.5 hidden sm:flex" title="Copy invite code">
-            <Share2 size={13}/> Invite
+          <button
+            onClick={handleCopyInvite}
+            className="btn-ghost text-xs gap-1.5 hidden sm:flex"
+            title="Copy invite code"
+          >
+            <Share2 size={13}/>
+            Invite
           </button>
         )}
 
-        {/* Notification bell with count */}
+        {/* Notification bell with COUNT badge */}
         <div className="relative">
-          <button onClick={() => setNotifOpen(o => !o)} className="btn-ghost p-2 relative" title="Notifications">
+          <button
+            onClick={() => setNotifOpen(o => !o)}
+            className="btn-ghost p-2 relative"
+            title="Notifications"
+          >
             <Bell size={17}/>
+            {/* FIX: Show count number instead of just a dot */}
             {unread > 0 && (
               <span className={`
-                absolute flex items-center justify-center font-bold rounded-full
-                bg-red-500 text-white leading-none
+                absolute flex items-center justify-center
+                bg-red-500 text-white font-bold rounded-full
                 ${unread > 9
                   ? "-top-1 -right-1 w-5 h-5 text-[9px]"
-                  : "-top-0.5 -right-0.5 w-4 h-4 text-[10px]"}
+                  : "-top-0.5 -right-0.5 w-4 h-4 text-[10px]"
+                }
               `}>
                 {unread > 99 ? "99+" : unread}
               </span>
@@ -123,6 +141,7 @@ export default function TopBar() {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)}/>
               <div className="absolute right-0 top-11 w-80 card shadow-xl z-50 animate-fade-in overflow-hidden">
+                {/* Header */}
                 <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-[var(--text)]">Notifications</span>
@@ -134,7 +153,11 @@ export default function TopBar() {
                   </div>
                   <div className="flex items-center gap-1">
                     {unread > 0 && (
-                      <button onClick={handleMarkAllRead} className="btn-ghost p-1.5 text-xs gap-1" title="Mark all read">
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="btn-ghost p-1.5 text-xs gap-1"
+                        title="Mark all as read"
+                      >
                         <CheckCheck size={13}/> All read
                       </button>
                     )}
@@ -144,6 +167,7 @@ export default function TopBar() {
                   </div>
                 </div>
 
+                {/* List */}
                 <div className="max-h-80 overflow-y-auto scrollbar-none">
                   {notifications.length === 0 ? (
                     <div className="py-10 text-center">
@@ -162,8 +186,10 @@ export default function TopBar() {
                         `}
                       >
                         <div className="flex items-start gap-2">
-                          {!n.isRead && <div className="w-1.5 h-1.5 rounded-full bg-brand-500 mt-1.5 shrink-0"/>}
-                          <div className="flex-1 min-w-0">
+                          {!n.isRead && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-brand-500 mt-1.5 shrink-0"/>
+                          )}
+                          <div className="flex-1">
                             <p className="text-xs font-semibold text-[var(--text)]">{n.title}</p>
                             <p className="text-xs text-[var(--text-2)] mt-0.5 leading-relaxed">{n.message}</p>
                           </div>

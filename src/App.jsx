@@ -3,7 +3,6 @@ import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import useStore from "./store/useStore";
 import { authApi } from "./services/api";
-import { initUserSocket, joinTeamRoom } from "./services/socket";
 
 import LoginPage       from "./pages/LoginPage";
 import OnboardingPage  from "./pages/OnboardingPage";
@@ -51,16 +50,11 @@ export default function App() {
     authApi.getMe()
       .then(r => {
         setUser(r.data.user);
-        // Initialize shared socket immediately after auth
-        initUserSocket(r.data.user.id);
         return authApi.getMyTeams();
       })
       .then(r => {
         setTeams(r.data.teams);
-        if (r.data.teams.length > 0) {
-          setActiveTeam(r.data.teams[0]);
-          joinTeamRoom(r.data.teams[0].id);
-        }
+        if (r.data.teams.length > 0) setActiveTeam(r.data.teams[0]);
         setAuthLoading(false);
       })
       .catch(() => {
