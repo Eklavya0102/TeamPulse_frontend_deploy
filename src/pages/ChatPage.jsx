@@ -224,17 +224,15 @@ export default function ChatPage() {
     // Singleton may already be connected — set state immediately
     if (sock.connected) setConnected(true);
 
-    const handleConnect = () => {
+    sock.on("connect", () => {
       setConnected(true);
       // Re-join current room after reconnect
       if (activeRoom?.id) {
         sock.emit("join_room", { roomId: activeRoom.id, userId: user.id });
       }
-    };
-    const handleDisconnect = () => setConnected(false);
+    });
 
-    sock.on("connect", handleConnect);
-    sock.on("disconnect", handleDisconnect);
+    sock.on("disconnect", () => setConnected(false));
 
     // FIX: Only ONE handler for new_message
     const handleNewMessage = (msg) => {
@@ -256,22 +254,21 @@ export default function ChatPage() {
 
     sock.on("new_message", handleNewMessage);
 
-    const handleTyping = ({ userId, userName, isTyping }) => {
+    sock.on("user_typing", ({ userId, userName, isTyping }) => {
       if (userId === user.id) return;
       setTyping(prev =>
         isTyping
           ? [...prev.filter(n => n !== userName), userName]
           : prev.filter(n => n !== userName)
       );
-    };
-    sock.on("user_typing", handleTyping);
+    });
 
     // Cleanup: only remove listeners, keep shared socket alive
     return () => {
-      sock.off("connect",    handleConnect);
-      sock.off("disconnect", handleDisconnect);
+      sock.off("connect");
+      sock.off("disconnect");
       sock.off("new_message", handleNewMessage);
-      sock.off("user_typing", handleTyping);
+      sock.off("user_typing");
     };
   }, [user?.id]);
 
