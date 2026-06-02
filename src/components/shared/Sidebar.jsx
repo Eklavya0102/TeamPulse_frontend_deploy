@@ -100,8 +100,12 @@ export default function Sidebar() {
   const [teamMenuOpen, setTeamMenuOpen] = useState(false);
   const [deleteModal,  setDeleteModal]  = useState(null);
   const [unreadCount,  setUnreadCount]  = useState(0);
-  const socketRef = useRef(null);
+  const socketRef   = useRef(null);
+  const pathnameRef = useRef(pathname);
   const collapsed = sidebarCollapsed;
+
+  // Keep pathnameRef in sync so socket handler always reads current value
+  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
 
   // Socket for unread message badge
   useEffect(() => {
@@ -111,7 +115,7 @@ export default function Sidebar() {
     socketRef.current = sock;
 
     const handleNewMessage = (msg) => {
-      if (pathname === "/chat") return;
+      if (pathnameRef.current === "/chat") return;
       if (msg.userId === user.id) return;
       setUnreadCount(prev => prev + 1);
     };
