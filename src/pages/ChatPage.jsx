@@ -221,6 +221,9 @@ export default function ChatPage() {
     const sock = getAppSocket();
     socketRef.current = sock;
 
+    // Singleton may already be connected — set state immediately
+    if (sock.connected) setConnected(true);
+
     sock.on("connect", () => {
       setConnected(true);
       // Re-join current room after reconnect

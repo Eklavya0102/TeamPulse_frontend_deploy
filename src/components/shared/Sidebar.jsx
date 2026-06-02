@@ -4,7 +4,7 @@
 // Logout: only clears token, all DB data preserved
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { io } from "socket.io-client";
+import { getAppSocket } from "../../services/socket";
 import useStore from "../../store/useStore";
 import { authApi } from "../../services/api";
 import toast from "react-hot-toast";
@@ -107,27 +107,19 @@ export default function Sidebar() {
   useEffect(() => {
     if (!user?.id || !activeTeam?.id) return;
 
-    const sock = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:5000", {
-      transports: ["websocket", "polling"],
-      reconnection: true,
-    });
+    const sock = getAppSocket();
     socketRef.current = sock;
 
-    sock.on("connect", () => {
-      sock.emit("join_user_room",  { userId:  user.id });
-      sock.emit("join_team_room",  { teamId:  activeTeam.id, userId: user.id });
-    });
-
-    sock.on("new_message", (msg) => {
-      // Only count if NOT on chat page AND message is from someone else
+    const handleNewMessage = (msg) => {
       if (pathname === "/chat") return;
       if (msg.userId === user.id) return;
       setUnreadCount(prev => prev + 1);
-    });
+    };
+
+    sock.on("new_message", handleNewMessage);
 
     return () => {
-      sock.off("new_message");
-      sock.disconnect();
+      sock.off("new_message", handleNewMessage);
       socketRef.current = null;
     };
   }, [user?.id, activeTeam?.id]);
