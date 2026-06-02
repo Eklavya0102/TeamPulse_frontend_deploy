@@ -1,4 +1,7 @@
 // src/store/useStore.js
+// Fix: logout only clears token + UI state
+// All DB data (tasks, teams, chat, knowledge) is stored in SQLite on the backend
+// and reloads automatically on next login — nothing is lost
 import { create } from "zustand";
 
 const useStore = create((set, get) => ({
@@ -11,14 +14,32 @@ const useStore = create((set, get) => ({
   setUser:        (user)  => set({ user }),
   setToken:       (token) => { localStorage.setItem("atb_token", token); set({ token }); },
   setAuthLoading: (v)     => set({ isAuthLoading: v }),
+
+  // FIX: logout only removes the JWT token and clears in-memory UI state
+  // All actual data lives in the backend SQLite DB and is never deleted on logout
+  // When user logs back in, everything reloads from the DB automatically
   logout: () => {
     localStorage.removeItem("atb_token");
     set({
-      user: null, token: null,
-      activeTeam: null, teams: [], teamMembers: [],
-      tasks: [], rooms: [], activeRoom: null,
-      messages: [], knowledgeItems: [],
-      dashboardData: null, notifications: [],
+      // Auth
+      user:          null,
+      token:         null,
+      // Teams (cleared from memory only — still in DB)
+      activeTeam:    null,
+      teams:         [],
+      teamMembers:   [],
+      // Tasks (cleared from memory only — still in DB)
+      tasks:         [],
+      // Chat (cleared from memory only — still in DB)
+      rooms:         [],
+      activeRoom:    null,
+      messages:      [],
+      // Knowledge (cleared from memory only — still in DB)
+      knowledgeItems: [],
+      // Dashboard
+      dashboardData:  null,
+      // Notifications
+      notifications:  [],
     });
   },
 
@@ -49,9 +70,9 @@ const useStore = create((set, get) => ({
   activeRoom: null,
   messages:   [],
 
-  setRooms:      (rooms)    => set({ rooms }),
-  setActiveRoom: (room)     => set({ activeRoom: room, messages: [] }),
-  setMessages:   (msgOrFn)  => set(s => ({
+  setRooms:      (rooms)   => set({ rooms }),
+  setActiveRoom: (room)    => set({ activeRoom: room, messages: [] }),
+  setMessages:   (msgOrFn) => set(s => ({
     messages: typeof msgOrFn === "function" ? msgOrFn(s.messages) : msgOrFn,
   })),
   addMessage: (msg) => set(s => {
@@ -71,8 +92,8 @@ const useStore = create((set, get) => ({
   dashboardData:    null,
   setDashboardData: (data) => set({ dashboardData: data }),
 
-  // ── Notifications — accepts array OR updater fn ────────────
-  notifications: [],
+  // ── Notifications ─────────────────────────────────────────
+  notifications:   [],
   setNotifications: (nOrFn) => set(s => ({
     notifications: typeof nOrFn === "function" ? nOrFn(s.notifications) : nOrFn,
   })),

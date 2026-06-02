@@ -2,9 +2,9 @@
 // Fix: Duplicate messages - use ref-based socket, no module singleton
 // Fix: Proper cleanup prevents double event handler registration
 import { useEffect, useRef, useState, useCallback } from "react";
-import { io } from "socket.io-client";
 import useStore from "../store/useStore";
 import { chatApi } from "../services/api";
+import { getAppSocket } from "../services/socket";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import {
   Send, Plus, Hash, Sparkles, Loader2,
@@ -12,15 +12,6 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-// ── Socket factory — creates a fresh socket each time ─────────
-// No module-level singleton to avoid double-registration across mounts
-function createSocket() {
-  return io(import.meta.env.VITE_SOCKET_URL || "http://localhost:5000", {
-    transports: ["websocket", "polling"],
-    reconnection: true,
-    reconnectionAttempts: 5,
-  });
-}
 
 function formatDateDivider(dateStr) {
   try {
@@ -226,8 +217,8 @@ export default function ChatPage() {
   useEffect(() => {
     if (!user?.id) return;
 
-    // Create fresh socket
-    const sock = createSocket();
+    // Create fresh socket and store in ref so selectRoom/handleSend can use it
+    const sock = getAppSocket();
     socketRef.current = sock;
 
     sock.on("connect", () => {
@@ -269,16 +260,14 @@ export default function ChatPage() {
       );
     });
 
-    // Cleanup: remove ALL listeners and disconnect
+    // Cleanup: only remove listeners, keep shared socket alive
     return () => {
       sock.off("connect");
       sock.off("disconnect");
       sock.off("new_message", handleNewMessage);
       sock.off("user_typing");
-      sock.disconnect();
-      socketRef.current = null;
     };
-  }, [user?.id]); // only re-create socket if user changes
+  }, [user?.id]);
 
   // Auto-scroll
   useEffect(() => {
