@@ -17,24 +17,24 @@ import {
 } from "lucide-react";
 
 // Professional feature icons using Lucide
-// const FEATURES = [
-//   {
-//     icon: Zap,
-//     text: "Extracts tasks, deadlines & assignees from meetings automatically",
-//   },
-//   {
-//     icon: Search,
-//     text: "Semantic search across all your team's documents and discussions",
-//   },
-//   {
-//     icon: MessageSquare,
-//     text: "Real-time collaboration with AI-powered conversation summaries",
-//   },
-//   {
-//     icon: BarChart2,
-//     text: "Track team productivity, task trends and performance analytics",
-//   },
-// ];
+const FEATURES = [
+  {
+    icon: Zap,
+    text: "Extracts tasks, deadlines & assignees from meetings automatically",
+  },
+  {
+    icon: Search,
+    text: "Semantic search across all your team's documents and discussions",
+  },
+  {
+    icon: MessageSquare,
+    text: "Real-time collaboration with AI-powered conversation summaries",
+  },
+  {
+    icon: BarChart2,
+    text: "Track team productivity, task trends and performance analytics",
+  },
+];
 
 export default function LoginPage() {
   const navigate = useNavigate();
