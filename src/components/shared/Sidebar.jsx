@@ -4,7 +4,7 @@
 // Logout: only clears token, all DB data preserved
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { getAppSocket } from "../../services/socket";
+import { getAppSocket, disconnectSocket } from "../../services/socket";
 import useStore from "../../store/useStore";
 import { authApi } from "../../services/api";
 import toast from "react-hot-toast";
@@ -130,6 +130,7 @@ export default function Sidebar() {
   }, [pathname]);
 
   const handleLogout = () => {
+    disconnectSocket(); // drop the authenticated socket so the next login gets a fresh one
     logout(); // only clears token + memory state, DB data is safe
     navigate("/login");
     toast.success("Signed out — your data is saved ✓");

@@ -20,6 +20,7 @@ const useStore = create((set, get) => ({
   // When user logs back in, everything reloads from the DB automatically
   logout: () => {
     localStorage.removeItem("atb_token");
+    localStorage.removeItem("atb_refresh_token");
     set({
       // Auth
       user:          null,

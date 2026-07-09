@@ -51,6 +51,7 @@ export default function LoginPage() {
   const finishLogin = async (idToken, email, displayName) => {
     const r = await authApi.firebaseLogin(idToken, email, displayName);
     setToken(r.data.accessToken);
+    localStorage.setItem("atb_refresh_token", r.data.refreshToken);
     setUser(r.data.user);
     const teamsR = await authApi.getMyTeams();
     setTeams(teamsR.data.teams);

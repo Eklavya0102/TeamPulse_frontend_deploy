@@ -15,6 +15,10 @@ export function getAppSocket() {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      // SECURITY FIX: authenticate the socket connection with our JWT.
+      // This is a function (not a static object) so it's re-read on every
+      // reconnection attempt too, not just the first one.
+      auth: (cb) => cb({ token: localStorage.getItem("atb_token") }),
     });
   }
   return _socket;

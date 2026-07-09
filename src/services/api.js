@@ -15,16 +15,87 @@ api.interceptors.request.use(cfg => {
   return cfg;
 });
 
+// ── Silent token refresh ─────────────────────────────────────
+// Access tokens now expire (see backend app.py). Rather than bouncing the
+// user to /login every time that happens, we try ONE silent refresh using
+// the longer-lived refresh token and retry the original request. Only if
+// the refresh itself fails (refresh token also expired/invalid) do we
+// actually log the user out — this is the same end state as before, just
+// no longer triggered by routine access-token expiry.
+let isRefreshing = false;
+let pendingQueue = [];
+
+function resolveQueue(newToken, error) {
+  pendingQueue.forEach(({ resolve, reject }) => {
+    if (error) reject(error);
+    else resolve(newToken);
+  });
+  pendingQueue = [];
+}
+
+function forceLogout() {
+  localStorage.removeItem("atb_token");
+  localStorage.removeItem("atb_refresh_token");
+  if (!window.location.pathname.includes("/login")) {
+    window.location.href = "/login";
+  }
+}
+
 api.interceptors.response.use(
   r => r,
-  err => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem("atb_token");
-      if (!window.location.pathname.includes("/login")) {
-        window.location.href = "/login";
-      }
+  async (err) => {
+    const status = err.response?.status;
+    const original = err.config;
+    const url = original?.url || "";
+
+    // Never try to "refresh" a failed login or a failed refresh itself —
+    // those failing means the credentials/refresh token are genuinely
+    // invalid, not just a routine expired access token.
+    const isAuthEndpoint = url.includes("/auth/firebase-login") || url.includes("/auth/refresh");
+
+    if (status !== 401 || isAuthEndpoint || !original || original._retry) {
+      if (status === 401) forceLogout();
+      return Promise.reject(err);
     }
-    return Promise.reject(err);
+
+    const refreshToken = localStorage.getItem("atb_refresh_token");
+    if (!refreshToken) {
+      forceLogout();
+      return Promise.reject(err);
+    }
+
+    original._retry = true;
+
+    if (isRefreshing) {
+      // A refresh is already in flight (e.g. several requests 401'd around
+      // the same moment) — queue this one and retry it once that refresh
+      // resolves, instead of firing another refresh call.
+      return new Promise((resolve, reject) => {
+        pendingQueue.push({ resolve, reject });
+      }).then(newToken => {
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return api(original);
+      });
+    }
+
+    isRefreshing = true;
+    try {
+      // Plain axios (not the `api` instance) so the request interceptor
+      // above doesn't overwrite this with the expired access token.
+      const { data } = await axios.post(`${BASE}/auth/refresh`, {}, {
+        headers: { Authorization: `Bearer ${refreshToken}` },
+      });
+      localStorage.setItem("atb_token", data.accessToken);
+      resolveQueue(data.accessToken, null);
+      original.headers.Authorization = `Bearer ${data.accessToken}`;
+      return api(original);
+    } catch (refreshErr) {
+      resolveQueue(null, refreshErr);
+      forceLogout();
+      return Promise.reject(refreshErr);
+    } finally {
+      isRefreshing = false;
+    }
   }
 );
 
