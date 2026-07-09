@@ -263,7 +263,7 @@ export default function LoginPage() {
               {/* Verification notice */}
               {verificationSent && (
                 <div className="mb-5 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                  <p className="text-sm font-semibold text-green-700 dark:text-green-400">📧 Check your inbox!</p>
+                  <p className="text-sm font-semibold text-green-700 dark:text-green-400"> ✉️ Check your inbox (Spam Folder)!</p>
                   <p className="text-xs text-green-600 dark:text-green-500 mt-1">
                     Verify your email before signing in.
                   </p>

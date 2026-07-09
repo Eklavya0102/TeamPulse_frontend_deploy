@@ -393,7 +393,7 @@ export default function MeetingIntelligencePage() {
                 <textarea
                   className="input resize-none font-mono text-xs sm:text-sm"
                   rows={10}
-                  placeholder={`Paste meeting notes, chat transcript, or discussion text here…\n\nExample:\n"John will finish the login page by Friday.\nSarah needs to handle the payment API by Monday EOD.\nMike should review the designs and share feedback by tomorrow noon."`}
+                  placeholder={`Paste meeting notes, chat transcript, or discussion text here…\n\nExample:\n"Asmi will finish the login page by Friday noon.\nArjun needs to handle the marketing strategy."`}
                   value={pasteText}
                   onChange={e => setPasteText(e.target.value)}
                 />
