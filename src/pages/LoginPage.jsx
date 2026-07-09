@@ -17,24 +17,24 @@ import {
 } from "lucide-react";
 
 // Professional feature icons using Lucide
-const FEATURES = [
-  {
-    icon: Zap,
-    text: "Extracts tasks, deadlines & assignees from meetings automatically",
-  },
-  {
-    icon: Search,
-    text: "Semantic search across all your team's documents and discussions",
-  },
-  {
-    icon: MessageSquare,
-    text: "Real-time collaboration with AI-powered conversation summaries",
-  },
-  {
-    icon: BarChart2,
-    text: "Track team productivity, task trends and performance analytics",
-  },
-];
+// const FEATURES = [
+//   {
+//     icon: Zap,
+//     text: "Extracts tasks, deadlines & assignees from meetings automatically",
+//   },
+//   {
+//     icon: Search,
+//     text: "Semantic search across all your team's documents and discussions",
+//   },
+//   {
+//     icon: MessageSquare,
+//     text: "Real-time collaboration with AI-powered conversation summaries",
+//   },
+//   {
+//     icon: BarChart2,
+//     text: "Track team productivity, task trends and performance analytics",
+//   },
+// ];
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -192,7 +192,7 @@ export default function LoginPage() {
             Every decision.<br/>Every deadline.<br/>Every person.
           </h1>
           <p className="text-brand-100 text-base leading-relaxed mb-10 max-w-sm">
-            TeamPulse turns scattered meetings, chats, and documents into clear action —
+            Turn scattered meetings, chats, and documents into clear action —
             so your team always knows what's next.
           </p>
 
